@@ -1,0 +1,8 @@
+evidence/
+fixtures/
+.DS_Store
+node_modules/
+*.tgz
+
+LAUNCH_HANDOFF.md
+RELEASE_CHECKPOINT.md

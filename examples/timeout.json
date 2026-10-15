@@ -1,0 +1,1 @@
+{"checks":[{"argv":["node","-e","setTimeout(()=>{}, 10000)"],"timeoutMs":150}]}

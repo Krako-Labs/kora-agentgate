@@ -1,0 +1,29 @@
+{
+  "name": "kora-agentgate",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "description": "Verify coding agent completion claims with executable task contracts",
+  "bin": {
+    "agentgate": "./agentgate.mjs"
+  },
+  "files": [
+    "agentgate.mjs",
+    "README.md",
+    "examples/pass.json",
+    "examples/fail.json",
+    "examples/claude-settings.example.json"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test",
+    "demo": "node agentgate.mjs verify --contract examples/pass.json"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Krako-Labs/kora-agentgate.git"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "checks": [
+    {
+      "name": "failing check",
+      "argv": [
+        "node",
+        "-e",
+        "process.exit(1)"
+      ]
+    }
+  ]
+}

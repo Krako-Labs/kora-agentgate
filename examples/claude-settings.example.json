@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /ABSOLUTE/PATH/TO/84_AgentGate-PoC/agentgate.mjs verify --contract .agentgate.json --claude-hook"
+          }
+        ]
+      }
+    ]
+  }
+}
