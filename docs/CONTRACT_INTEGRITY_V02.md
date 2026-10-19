@@ -2,6 +2,8 @@
 
 Status: design candidate, not implemented or released.
 
+**Latest verification (2026-10-19):** macOS deny-default sandbox with canonical paths passed a reproducible protected-policy + protected-Hook-file write-denial test while keeping the workspace writable. AgentGate's Stop Hook output was VERIFIED/allow and FAILED/block under the same sandbox. This supersedes earlier allow-default and noncanonical-path sandbox experiments. **Real Claude Code model E2E is still blocked: the host CLI itself reports `loggedIn: false`. This is a sandbox/CLI smoke test, not a complete contract-integrity security guarantee.**
+
 ## User signal
 Dev Verma (LinkedIn), Tim Sherstyuk (X), and MONSMITH (X) independently questioned who is allowed to modify the check contract. MONSMITH suggested a versioned repo-level baseline, with per-task checks that can only tighten it.
 
@@ -39,3 +41,23 @@ A real developer can use the reference setup quickly; adversarial tampering fail
 - A second `sandbox-exec` experiment with explicit `deny file-write-data` for a literal policy path plus `deny file-write-create` for the parent directory still permitted modification: original file became `changed`. Therefore do not use this environment as proof of a protected policy.
 - **NO-GO** on macOS isolation claim. Do not issue v0.2 or claim actual Claude Code adversarial testing has passed.
 - Next required step: administrator-approved separate execution identity/sandbox or an external Linux test host, with a trusted hook that the coding agent cannot edit. Run actual Claude Code adversarial scenarios only under that proven isolation.
+
+
+## Reproducible macOS smoke test — 2026-10-19
+
+```sh
+npm run test:isolation
+```
+
+On MSM2-1 (macOS 26.7.1, Node 26.7.0), the test passed all five assertions:
+- A deny-default Seatbelt profile blocked rewriting the trusted contract.
+- It blocked rewriting the trusted Stop Hook settings file.
+- It allowed ordinary writes inside the canonical agent workspace.
+- AgentGate returned an allow decision for VERIFIED.
+- AgentGate returned a block decision for FAILED.
+
+The script generates disposable files under `/private/tmp` and cleans up. It does **not** create macOS accounts or modify KORA Reach, and it does not run an actual Claude Code model. No network access is allowed in this test.
+
+**Remaining blocker:** `~/.local/bin/claude auth status` reported `loggedIn: false` both inside and outside the sandbox. No credentials were inspected, copied, or imported. Real Claude Code auth and Stop Hook E2E remain pending an interactive login by the account owner.
+
+**Important limitations:** The smoke test checks direct filesystem writes and the CLI Hook verdict, not networked MCP/unsandboxed-service escape paths, alternate model sessions, privacy/data exfiltration, or general OS security. Its read permissions are deliberately broad to support the Node runtime, and must be narrowed before a production isolation claim. Protect the authoritative settings and policy via an externally controlled launcher, not merely an editable project setting. v0.2 remains **NO-GO** until a real agent adversarial test is completed.

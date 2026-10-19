@@ -19,7 +19,8 @@
   },
   "scripts": {
     "test": "node --test",
-    "demo": "node agentgate.mjs verify --contract examples/pass.json"
+    "demo": "node agentgate.mjs verify --contract examples/pass.json",
+    "test:isolation": "node scripts/macos-contract-isolation-smoke.mjs"
   },
   "license": "MIT",
   "repository": {
