@@ -1,6 +1,6 @@
 {
   "name": "kora-agentgate",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": false,
   "type": "module",
   "description": "Verify coding agent completion claims with executable task contracts",
