@@ -38,3 +38,19 @@ When checks pass, hook prints `{}`. Otherwise it prints `{"decision":"block",...
 
 ## License
 MIT. This project is independent of other software using the name AgentGate.
+
+## Experimental macOS protected launcher (development preview)
+
+**Try the macOS write-boundary smoke test without Claude login or an API key:**
+
+```sh
+git clone -b feat/protected-launcher-v02 https://github.com/Krako-Labs/kora-agentgate.git ~/agentgate-preview
+node ~/agentgate-preview/protected-runner.mjs --self-test
+```
+
+This offline test uses a disposable mock agent; it is not a security audit or a real-model integration test.
+
+
+The v0.2 candidate includes a **trusted external launcher** that runs Claude Code in a scoped macOS write sandbox with the verification contract and Hook settings outside the agent-writable project. This is **not** a general-purpose security sandbox. It does not block all reads, network exfiltration, local service escapes, or unsandboxed alternative launch paths.
+
+See [Protected Launcher Preview](docs/PROTECTED_LAUNCHER_PREVIEW.md) for prerequisites, commands, limitations, and the feedback request. The preview's trusted parent performs a separate postflight verification and writes audit JSON outside the agent-writable workspace; checks run again and should be repeatable. The latest public tagged release remains v0.1.1.
