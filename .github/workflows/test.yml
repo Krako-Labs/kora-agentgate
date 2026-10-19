@@ -15,3 +15,6 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
       - run: npm test
+      - name: macOS contract isolation smoke
+        if: runner.os == 'macOS'
+        run: npm run test:isolation

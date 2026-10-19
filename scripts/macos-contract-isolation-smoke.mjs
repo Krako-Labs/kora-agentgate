@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, realpathSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, realpathSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -54,6 +54,21 @@ try {
   assert.equal(workspaceWrite.status, 0, 'workspace should be writable');
   assert.equal(readFileSync(join(workspace, 'test.txt'), 'utf8'), 'ok');
 
+  // An alias created in the writable workspace must not bypass protection of its target.
+  const alias = join(workspace, 'policy-alias.json');
+  symlinkSync(fail, alias);
+  const aliasWrite = sandbox('/bin/sh', ['-c', 'printf "replacement" > "$1"', 'test', alias]);
+  assert.notEqual(aliasWrite.status, 0, 'symlink alias must not allow writing the trusted policy');
+  assert.equal(readFileSync(fail, 'utf8'), initialPolicy);
+
+  // Changing a local, agent-writable contract must not override an external authoritative contract.
+  const localContract = join(workspace, '.agentgate.json');
+  writeFileSync(localContract, JSON.stringify(policy(0)));
+  const trustedVerdict = sandbox(process.execPath, [cli, 'verify', '--contract', fail, '--claude-hook']);
+  const localVerdict = sandbox(process.execPath, [cli, 'verify', '--contract', localContract, '--claude-hook']);
+  assert.equal(JSON.parse(trustedVerdict.stdout).decision, 'block');
+  assert.notEqual(JSON.parse(localVerdict.stdout).decision, 'block');
+
   for (const [contract, expected] of [[pass, 'VERIFIED'], [fail, 'FAILED']]) {
     const evidence = join(workspace, expected.toLowerCase() + '.json');
     const result = sandbox(process.execPath, [cli, 'verify', '--contract', contract, '--evidence', evidence, '--claude-hook']);
@@ -63,7 +78,7 @@ try {
     const recorded = JSON.parse(readFileSync(evidence, 'utf8'));
     assert.equal(recorded.status, expected);
   }
-  console.log(JSON.stringify({ platform: process.platform, policy_write_blocked: true, hook_settings_write_blocked: true, workspace_writable: true, verified_hook_pass: true, failed_hook_block: true }, null, 2));
+  console.log(JSON.stringify({ platform: process.platform, policy_write_blocked: true, hook_settings_write_blocked: true, workspace_writable: true, symlink_write_blocked: true, editable_contract_cannot_override_trusted: true, verified_hook_pass: true, failed_hook_block: true }, null, 2));
 } finally {
   rmSync(root, { recursive: true, force: true });
 }
