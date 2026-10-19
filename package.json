@@ -1,18 +1,21 @@
 {
   "name": "kora-agentgate",
-  "version": "0.1.1",
+  "version": "0.2.0-beta.0",
   "private": false,
   "type": "module",
   "description": "Verify coding agent completion claims with executable task contracts",
   "bin": {
-    "agentgate": "./agentgate.mjs"
+    "agentgate": "./agentgate.mjs",
+    "agentgate-protected": "./protected-runner.mjs"
   },
   "files": [
     "agentgate.mjs",
+    "protected-runner.mjs",
     "README.md",
     "examples/pass.json",
     "examples/fail.json",
-    "examples/claude-settings.example.json"
+    "examples/claude-settings.example.json",
+    "docs/PROTECTED_LAUNCHER_PREVIEW.md"
   ],
   "engines": {
     "node": ">=20"
