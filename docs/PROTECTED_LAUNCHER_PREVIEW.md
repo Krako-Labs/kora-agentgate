@@ -4,6 +4,22 @@
 
 **Status:** Preview implementation, **not a security certification**. The public release remains v0.1.1 until adoption and safety checks justify a new tag.
 
+## 60-second offline self-test (macOS)
+
+No Claude login, API key, project access, or paid model tokens are required for this first check. It uses a disposable mock agent and cleans up its temporary files.
+
+```sh
+git clone -b feat/protected-launcher-v02 https://github.com/Krako-Labs/kora-agentgate.git ~/agentgate-preview
+node ~/agentgate-preview/protected-runner.mjs --self-test
+```
+
+Expected: JSON with `"result": "PASS"` and three checks:
+`passing-contract`, `forged-workspace-evidence-rejected`, and `trusted-policy-and-audit-write-denied`.
+
+This is **only a local offline write-boundary smoke test**, not proof that Claude Code or a production sandbox is secure. If it fails, please report the macOS and Node.js versions and the error text in a GitHub issue. Do not share tokens or private paths.
+
+After passing, continue with the real Claude Code preview below using **a disposable project**. Place the AgentGate installation outside that project.
+
 ## Requirements
 - macOS and Node.js 20+; `sandbox-exec` present.
 - Claude Code CLI already installed and signed in.
@@ -44,6 +60,8 @@ The launcher:
 6. Rejects successful model termination unless the independent result is `VERIFIED` **and** the parent audit record was saved. Cleans up temporary Hook and sandbox files.
 
 **Important:** The final audit record is **outside the writable workspace and cannot be overwritten by the tested sandboxed agent process**. It is not cryptographically signed, globally immutable, or tamper-proof against a compromised/unconfined host. Its contents can include stdout/stderr from tests, so protect the directory. A forged `VERIFIED` file inside the workspace is ignored.
+
+**Timing diagnostics:** Each parent-owned audit includes `timings.modelDurationMs`, `timings.postflightDurationMs`, and `timings.totalDurationMs` as observed wall-clock measurements. These help identify whether repeat verification becomes expensive in real projects. They are not token-cost estimates.
 
 **Cost and side-effect tradeoff:** the same verification contract is run by the Stop Hook and again by the trusted parent after the session. These checks **must be safe to repeat**. The extra run can add latency and cost, especially for large suites. The parent verification is needed here because the sandboxed Hook cannot write to the protected directory. We will consider eliminating the duplicate run only if user feedback shows it is a bottleneck.
 

@@ -128,6 +128,7 @@ export function prepare(options) {
 // It deliberately executes declared checks again after Claude exits. Contracts should
 // therefore use repeatable, side-effect-safe checks.
 export async function runPostflight(config, env) {
+  const startedAt=Date.now();
   return await new Promise(done=>{
     let finished=false, timedOut=false, stdout='', errorText='', oversized=false, child, watchdog;
     const finish=(code,signal,error)=>{
@@ -146,7 +147,7 @@ export async function runPostflight(config, env) {
           status=report.status;
         }catch(e){reason='Invalid independent verification result: '+e.message;report=null;}
       } else if(oversized) reason='Verifier output exceeded size cap';
-      done({status,report,reason,exitCode:code,signal,stderr:errorText.slice(-2048)});
+      done({status,report,reason,exitCode:code,signal,stderr:errorText.slice(-2048),durationMs:Date.now()-startedAt});
     };
     try {
       child=spawn('/usr/bin/sandbox-exec',
@@ -180,12 +181,14 @@ export async function execute(config, {dryRun=false}={}) {
       notice:'Experimental macOS write boundary; parent re-verifies checks and writes a per-run audit record'},null,2));
     return 0;
   }
+  const sessionStarted=Date.now();
   const env={...process.env,TMPDIR:config.scratch+'/'};
   // Remove credentials and common runtime-injection environment variables.
   for(const key of Object.keys(env)) {
     if (/(TOKEN|SECRET|PASSWORD|PRIVATE_KEY|API_KEY)/i.test(key) ||
         /^(NODE_OPTIONS|NODE_PATH|BASH_ENV|ENV|DYLD_.*|LD_.*)$/i.test(key)) delete env[key];
   }
+  const modelStarted=Date.now();
   const model=await new Promise(done=>{
     let settled=false;
     const finish=(code,signal,error)=>{
@@ -198,6 +201,7 @@ export async function execute(config, {dryRun=false}={}) {
     child.on('error',e=>finish(null,null,e));
     child.on('exit',(code,signal)=>finish(code,signal,null));
   });
+  const modelDurationMs=Date.now()-modelStarted;
   // The Hook output is not trusted as a durable audit record. The parent performs
   // a fresh, supervised verification even when the model exits unsuccessfully.
   let postflight;
@@ -217,6 +221,7 @@ export async function execute(config, {dryRun=false}={}) {
     modelExitCode:model.exitCode,modelSignal:model.signal,modelError:model.error,
     status:postflight.status,accepted,reason:postflight.reason,
     verificationExitCode:postflight.exitCode,verification:postflight.report,
+    timings:{modelDurationMs,postflightDurationMs:postflight.durationMs??null,totalDurationMs:Date.now()-sessionStarted},
   };
   try {
     writeFileSync(config.auditFile,JSON.stringify(audit,null,2)+'\n',{flag:'wx',mode:0o600});
@@ -232,7 +237,11 @@ export async function execute(config, {dryRun=false}={}) {
   return 0;
 }
 export async function main(argv=process.argv.slice(2)) {
-  const help='Usage: agentgate-protected --workspace /ABS/APP --contract /ABS/TRUSTED/contract.json --prompt "Task" [--dry-run] [--claude PATH] [--max-turns 3] [--budget 0.50] [--audit-dir /TRUSTED/DIR]\n' +
+  if(argv.length===1 && argv[0]==='--self-test') {
+    const {selfTest}=await import('./scripts/protected-smoke.mjs');
+    return selfTest();
+  }
+  const help='Usage: agentgate-protected --self-test (offline macOS trial)\n       agentgate-protected --workspace /ABS/APP --contract /ABS/TRUSTED/contract.json --prompt "Task" [--dry-run] [--claude PATH] [--max-turns 3] [--budget 0.50] [--audit-dir /TRUSTED/DIR]\n' +
    'Experimental macOS launch only. Contract, CLI and launcher must be outside writable workspace. No general sandbox security guarantee.';
   if (argv.includes('--help') || argv.includes('-h')) {console.log(help);return 0;}
   let ctx;

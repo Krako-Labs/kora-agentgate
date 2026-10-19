@@ -15,7 +15,8 @@
     "examples/pass.json",
     "examples/fail.json",
     "examples/claude-settings.example.json",
-    "docs/PROTECTED_LAUNCHER_PREVIEW.md"
+    "docs/PROTECTED_LAUNCHER_PREVIEW.md",
+    "scripts/protected-smoke.mjs"
   ],
   "engines": {
     "node": ">=20"
@@ -23,7 +24,8 @@
   "scripts": {
     "test": "node --test",
     "demo": "node agentgate.mjs verify --contract examples/pass.json",
-    "test:isolation": "node scripts/macos-contract-isolation-smoke.mjs"
+    "test:isolation": "node scripts/macos-contract-isolation-smoke.mjs",
+    "test:preview": "node protected-runner.mjs --self-test"
   },
   "license": "MIT",
   "repository": {

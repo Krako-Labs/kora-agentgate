@@ -137,6 +137,11 @@ test('successful parent postflight accepts check without mutable Hook evidence',
  assert.equal(audit.status,'VERIFIED');
  assert.equal(audit.accepted,true);
  assert.equal(audit.verification.status,'VERIFIED');
+ assert.ok(Number.isFinite(audit.timings.modelDurationMs));
+ assert.ok(Number.isFinite(audit.timings.postflightDurationMs));
+ assert.ok(Number.isFinite(audit.timings.totalDurationMs));
+ assert.ok(audit.timings.totalDurationMs>=audit.timings.postflightDurationMs);
+
  assert.equal(existsSync(join(workspace,'.agentgate','evidence')),false,'Hook should not write to a mutable workspace evidence directory');
 }));
 
@@ -158,3 +163,15 @@ test('child exit failure is recorded even if independent checks pass', {skip:SKI
  assert.equal(audit.accepted,false);
  assert.equal(audit.modelExitCode,1);
 }));
+
+
+test('packaged offline self-test runs without Claude login or model usage', {skip:SKIP},()=>{
+ const result=spawnSync(process.execPath,[cli,'--self-test'],{encoding:'utf8',timeout:15000});
+ assert.equal(result.status,0,result.stderr);
+ const output=JSON.parse(result.stdout);
+ assert.equal(output.result,'PASS');
+ assert.equal(output.requiresClaudeLogin,false);
+ assert.equal(output.usesModelAPI,false);
+ assert.equal(output.checks.length,3);
+ assert.ok(output.checks.every(t=>t.ok===true));
+});
