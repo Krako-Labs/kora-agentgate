@@ -43,4 +43,4 @@ MIT. This project is independent of other software using the name AgentGate.
 
 The v0.2 candidate includes a **trusted external launcher** that runs Claude Code in a scoped macOS write sandbox with the verification contract and Hook settings outside the agent-writable project. This is **not** a general-purpose security sandbox. It does not block all reads, network exfiltration, local service escapes, or unsandboxed alternative launch paths.
 
-See [Protected Launcher Preview](docs/PROTECTED_LAUNCHER_PREVIEW.md) for prerequisites, commands, limitations, and the feedback request. The latest public tagged release remains v0.1.1.
+See [Protected Launcher Preview](docs/PROTECTED_LAUNCHER_PREVIEW.md) for prerequisites, commands, limitations, and the feedback request. The preview's trusted parent performs a separate postflight verification and writes audit JSON outside the agent-writable workspace; checks run again and should be repeatable. The latest public tagged release remains v0.1.1.

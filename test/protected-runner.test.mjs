@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
-import {mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync} from 'node:fs';
+import {mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, readdirSync, statSync, existsSync} from 'node:fs';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {prepare} from '../protected-runner.mjs';
@@ -18,14 +18,17 @@ function withTrial(fn) {
  try {return fn({root,workspace,trusted,contract});}
  finally {rmSync(root,{recursive:true,force:true});}
 }
-test('protected launcher prepares external settings, fixed flags and profile', {skip:SKIP},()=>withTrial(({workspace,contract})=>{
- const x=prepare({workspace,contract,prompt:'hello',maxTurns:2,budget:0.2,dryRun:true});
+test('protected launcher prepares external settings, fixed flags and profile', {skip:SKIP},()=>withTrial(({workspace,contract,trusted})=>{
+ const x=prepare({workspace,contract,auditDir:join(trusted,'audit'),prompt:'hello',maxTurns:2,budget:0.2,dryRun:true});
  try{
   const settings=JSON.parse(readFileSync(x.settings,'utf8'));
   const hook=settings.hooks.Stop[0].hooks[0].command;
   assert.match(hook,/--claude-hook/);
   assert.ok(hook.includes(contract));
   assert.ok(hook.includes(gate));
+  assert.ok(!hook.includes('--evidence'), 'Stop Hook must not write mutable workspace evidence');
+  assert.ok(x.auditFile.startsWith(join(trusted,'audit')+'/'));
+  assert.ok(!x.auditFile.startsWith(workspace+'/'));
   assert.ok(!x.workspace.startsWith(x.root));
   assert.ok(x.root.startsWith('/private/tmp/'));
   assert.equal(x.args[x.args.indexOf('--setting-sources')+1],'user');
@@ -55,8 +58,8 @@ test('protected launcher rejects invalid contracts and unsupported overrides', {
  assert.equal(r.status,2);
  assert.match(r.stderr,/Unsupported option/);
 }));
-test('protected launcher policy blocks writes to protected contract and settings', {skip:SKIP},()=>withTrial(({workspace,contract})=>{
- const x=prepare({workspace,contract,prompt:'test',maxTurns:1,budget:0.2,dryRun:true});
+test('protected launcher policy blocks writes to protected contract and settings', {skip:SKIP},()=>withTrial(({workspace,contract,trusted})=>{
+ const x=prepare({workspace,contract,auditDir:join(trusted,'audit'),prompt:'test',maxTurns:1,budget:0.2,dryRun:true});
  try{
   for (const p of [contract,x.settings,x.sandboxProfile]) {
     const before=readFileSync(p);
@@ -71,25 +74,87 @@ test('protected launcher policy blocks writes to protected contract and settings
  }finally{rmSync(x.root,{recursive:true,force:true});}
 }));
 
-test('each protected launch uses a fresh evidence path', {skip:SKIP},()=>withTrial(({workspace,contract})=>{
- const a=prepare({workspace,contract,prompt:'a',maxTurns:1,budget:0.2,dryRun:true});
- const b=prepare({workspace,contract,prompt:'b',maxTurns:1,budget:0.2,dryRun:true});
- try{
-  assert.notEqual(a.evidence,b.evidence);
-  assert.ok(a.evidence.startsWith(workspace+'/'));
-  assert.ok(b.evidence.startsWith(workspace+'/'));
+test('each protected launch uses a fresh parent-owned audit path', {skip:SKIP},()=>withTrial(({workspace,contract,trusted})=>{
+ const auditDir=join(trusted,'audit');
+ const a=prepare({workspace,contract,auditDir,prompt:'a',maxTurns:1,budget:0.2,dryRun:true});
+ const b=prepare({workspace,contract,auditDir,prompt:'b',maxTurns:1,budget:0.2,dryRun:true});
+ try {
+  assert.notEqual(a.auditFile,b.auditFile);
+  assert.ok(a.auditFile.startsWith(auditDir+'/'));
+  assert.ok(b.auditFile.startsWith(auditDir+'/'));
+  assert.ok(!a.auditFile.startsWith(workspace+'/'));
  }finally{
   rmSync(a.root,{recursive:true,force:true});
   rmSync(b.root,{recursive:true,force:true});
  }
 }));
 
-test('a child exiting zero without running the trusted Hook is not accepted', {skip:SKIP},()=>withTrial(({workspace,contract,trusted})=>{
+test('parent verification fails closed despite a fake agent VERIFIED evidence record', {skip:SKIP},()=>withTrial(({workspace,contract,trusted})=>{
+ // A malicious mock can write anything into the workspace, but cannot alter the parent audit.
+ writeFileSync(contract,JSON.stringify({checks:[{argv:[process.execPath,'-e','process.exit(1)']}]}));
+ const fake=join(trusted,'claude-fake.sh');
+ writeFileSync(fake,[
+  '#!/bin/sh','mkdir -p '+JSON.stringify(join(workspace,'.agentgate','evidence')),
+  `printf '{"status":"VERIFIED"}' > ${JSON.stringify(join(workspace,'.agentgate','evidence','forged.json'))}`,
+  'exit 0','',
+ ].join('\n'),{mode:0o755});
+ const auditDir=join(trusted,'audit');
+ const r=spawnSync(process.execPath,[cli,
+   '--workspace',workspace,'--contract',contract,'--audit-dir',auditDir,
+   '--claude',fake,'--prompt','READY','--max-turns','1'],{encoding:'utf8',timeout:15000});
+ assert.equal(r.status,2,'a fake agent VERIFIED record must not satisfy independent postflight');
+ const files=readdirSync(auditDir).filter(n=>n.endsWith('.json'));
+ assert.equal(files.length,1);
+ const audit=JSON.parse(readFileSync(join(auditDir,files[0]),'utf8'));
+ assert.equal(audit.status,'FAILED');
+ assert.equal(audit.accepted,false);
+ assert.equal(audit.verification.status,'FAILED');
+ assert.equal(statSync(join(auditDir,files[0])).mode & 0o777,0o600);
+ assert.equal(statSync(auditDir).mode & 0o777,0o700);
+ assert.ok(readFileSync(join(workspace,'.agentgate/evidence/forged.json'),'utf8').includes('VERIFIED'));
+ const sandbox=prepare({workspace,contract,auditDir,prompt:'test',maxTurns:1,budget:0.2,dryRun:true});
+ try {
+  const destination=join(auditDir,files[0]),original=readFileSync(destination);
+  const attack=spawnSync('/usr/bin/sandbox-exec',['-f',sandbox.sandboxProfile,'/bin/sh','-c','printf tampered > "$1"','test',destination],{cwd:workspace,encoding:'utf8',timeout:5000});
+  assert.notEqual(attack.status,0);
+  assert.deepEqual(readFileSync(destination),original);
+  const readAttempt=spawnSync('/usr/bin/sandbox-exec',['-f',sandbox.sandboxProfile,'/bin/cat',destination],{cwd:workspace,encoding:'utf8',timeout:5000});
+  assert.notEqual(readAttempt.status,0,'sandboxed agent must not read private audit records');
+ } finally {rmSync(sandbox.root,{recursive:true,force:true});}
+}));
+
+test('successful parent postflight accepts check without mutable Hook evidence', {skip:SKIP},()=>withTrial(({workspace,contract,trusted})=>{
  const fake=join(trusted,'claude-fake.sh');
  writeFileSync(fake,'#!/bin/sh\nexit 0\n',{mode:0o755});
+ const auditDir=join(trusted,'audit');
  const r=spawnSync(process.execPath,[cli,
-   '--workspace',workspace,'--contract',contract,
-   '--claude',fake,'--prompt','READY','--max-turns','1'],{encoding:'utf8',timeout:10000});
- assert.equal(r.status,2,'launcher must reject a bare success exit without Hook evidence');
- assert.match(r.stderr,/no fresh Hook evidence/);
+   '--workspace',workspace,'--contract',contract,'--audit-dir',auditDir,
+   '--claude',fake,'--prompt','READY','--max-turns','1'],{encoding:'utf8',timeout:15000});
+ assert.equal(r.status,0,r.stderr);
+ const files=readdirSync(auditDir).filter(n=>n.endsWith('.json'));
+ assert.equal(files.length,1);
+ const audit=JSON.parse(readFileSync(join(auditDir,files[0]),'utf8'));
+ assert.equal(audit.status,'VERIFIED');
+ assert.equal(audit.accepted,true);
+ assert.equal(audit.verification.status,'VERIFIED');
+ assert.equal(existsSync(join(workspace,'.agentgate','evidence')),false,'Hook should not write to a mutable workspace evidence directory');
+}));
+
+test('audit directory is never allowed inside the agent workspace', {skip:SKIP},()=>withTrial(({workspace,contract})=>{
+ assert.throws(()=>prepare({workspace,contract,auditDir:join(workspace,'audit'),prompt:'test',maxTurns:1,budget:0.2,dryRun:true}),/outside/);
+}));
+
+test('child exit failure is recorded even if independent checks pass', {skip:SKIP},()=>withTrial(({workspace,contract,trusted})=>{
+ const fake=join(trusted,'claude-fake.sh');
+ writeFileSync(fake,'#!/bin/sh\nexit 1\n',{mode:0o755});
+ const auditDir=join(trusted,'audit');
+ const r=spawnSync(process.execPath,[cli,
+   '--workspace',workspace,'--contract',contract,'--audit-dir',auditDir,
+   '--claude',fake,'--prompt','READY','--max-turns','1'],{encoding:'utf8',timeout:15000});
+ assert.equal(r.status,1);
+ const [file]=readdirSync(auditDir);
+ const audit=JSON.parse(readFileSync(join(auditDir,file),'utf8'));
+ assert.equal(audit.verification.status,'VERIFIED');
+ assert.equal(audit.accepted,false);
+ assert.equal(audit.modelExitCode,1);
 }));
