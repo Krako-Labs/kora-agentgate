@@ -39,10 +39,10 @@ The launcher:
 1. Resolves canonical paths and rejects a contract, AgentGate binary or launcher inside the writable workspace.
 2. Creates a temporary trusted Hook configuration and a deny-default macOS sandbox profile outside the workspace.
 3. Launches Claude Code with its project/local settings excluded, Chrome integration disabled, MCP configured empty, bounded run limits, and no session persistence.
-4. Runs the authoritative contract at Stop, saving a JSON evidence file under `.agentgate/evidence/latest.json` in the workspace.
+4. Runs the authoritative contract at Stop, saving per-run JSON evidence under `.agentgate/evidence/<run-id>.json` in the workspace.
 5. Removes the temporary trusted Hook configuration and profile when the session exits.
 
-**Important:** The evidence JSON is inside the writable workspace. Treat it as execution feedback, not an immutable or tamper-proof audit log. The Hook makes its own decision at execution time.
+**Important:** The evidence JSON is inside the writable workspace. Treat it as execution feedback, not an immutable or tamper-proof audit log. The Hook makes its own decision at execution time. The launcher rejects a clean Claude exit when no fresh VERIFIED evidence exists; the workspace file itself remains editable and must not be treated as tamper-proof.
 
 ## Verified behavior
 
@@ -69,3 +69,7 @@ GitHub: https://github.com/Krako-Labs/kora-agentgate/issues
 ## Installed-package validation — 2026-10-19
 
 A fresh local npm tarball installed successfully outside the agent workspace. Both CLI binaries worked, including a real Claude Code run that returned READY and wrote VERIFIED evidence. With a project-local .claude/settings.json containing a synthetic Stop Hook, the launcher still ran the authoritative external Hook; the synthetic project Hook did not execute. This is a positive smoke test, not a comprehensive security audit.
+
+## Evidence freshness and file-writing tool check
+
+The launcher generates a new evidence filename for every session and refuses to report a clean success exit if its corresponding VERIFIED record is absent. A controlled mock Claude process that exited 0 without invoking the Hook was rejected with exit code 2. A real isolated model invocation created an expected HELLO file inside the writable workspace and generated a fresh VERIFIED record. The evidence file remains writable by the agent and is not a signed security artifact.

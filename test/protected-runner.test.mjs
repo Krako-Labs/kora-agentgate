@@ -70,3 +70,26 @@ test('protected launcher policy blocks writes to protected contract and settings
   assert.equal(readFileSync(output,'utf8'),'ok');
  }finally{rmSync(x.root,{recursive:true,force:true});}
 }));
+
+test('each protected launch uses a fresh evidence path', {skip:SKIP},()=>withTrial(({workspace,contract})=>{
+ const a=prepare({workspace,contract,prompt:'a',maxTurns:1,budget:0.2,dryRun:true});
+ const b=prepare({workspace,contract,prompt:'b',maxTurns:1,budget:0.2,dryRun:true});
+ try{
+  assert.notEqual(a.evidence,b.evidence);
+  assert.ok(a.evidence.startsWith(workspace+'/'));
+  assert.ok(b.evidence.startsWith(workspace+'/'));
+ }finally{
+  rmSync(a.root,{recursive:true,force:true});
+  rmSync(b.root,{recursive:true,force:true});
+ }
+}));
+
+test('a child exiting zero without running the trusted Hook is not accepted', {skip:SKIP},()=>withTrial(({workspace,contract,trusted})=>{
+ const fake=join(trusted,'claude-fake.sh');
+ writeFileSync(fake,'#!/bin/sh\nexit 0\n',{mode:0o755});
+ const r=spawnSync(process.execPath,[cli,
+   '--workspace',workspace,'--contract',contract,
+   '--claude',fake,'--prompt','READY','--max-turns','1'],{encoding:'utf8',timeout:10000});
+ assert.equal(r.status,2,'launcher must reject a bare success exit without Hook evidence');
+ assert.match(r.stderr,/no fresh Hook evidence/);
+}));

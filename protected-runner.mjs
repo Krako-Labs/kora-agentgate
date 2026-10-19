@@ -2,6 +2,7 @@
 // Experimental macOS launcher. This is a scoped write-boundary demonstration,
 // not a general-purpose security sandbox or protection from network-based escapes.
 import {spawn} from 'node:child_process';
+import {randomUUID} from 'node:crypto';
 import {
   existsSync, mkdtempSync, mkdirSync, realpathSync, rmSync, readFileSync,
   statSync, writeFileSync,
@@ -86,7 +87,7 @@ export function prepare(options) {
   const scratch=join(root,'scratch');mkdirSync(scratch,{mode:0o700});
   const settings=join(root,'trusted-settings.json');
   const sandboxProfile=join(root,'seatbelt.sb');
-  const evidence=join(workspace,'.agentgate','evidence','latest.json');
+  const evidence=join(workspace,'.agentgate','evidence',randomUUID()+'.json');
   const command=[process.execPath,GATE,'verify','--contract',contract,'--evidence',evidence,'--claude-hook'].map(quoteShell).join(' ');
   writeFileSync(settings,JSON.stringify({hooks:{Stop:[{hooks:[{type:'command',command}]}]}},null,2)+'\n',{mode:0o600});
   writeFileSync(sandboxProfile,profile(workspace,scratch),{mode:0o600});
@@ -99,7 +100,7 @@ export function prepare(options) {
     '--permission-mode','dontAsk',
     '--max-turns',String(options.maxTurns),
     '--max-budget-usd',String(options.budget),
-    '--allowedTools','Bash,Edit,Read',
+    '--allowedTools','Bash,Read,Write,Edit,Glob,Grep',
   ];
   if(options.model)args.push('--model',options.model);
   return {root,workspace,contract,claude,settings,sandboxProfile,evidence,scratch,args};
@@ -122,7 +123,18 @@ export async function execute(config, {dryRun=false}={}) {
       cwd:config.workspace,env,stdio:['ignore','inherit','inherit'],
     });
     child.on('error',e=>{console.error(e.message);done(2);});
-    child.on('exit',(code,signal)=>done(code??(signal?1:2)));
+    child.on('exit',(code,signal)=>{
+      let verified=false;
+      if(existsSync(config.evidence)){
+        try {verified=JSON.parse(readFileSync(config.evidence,'utf8')).status==='VERIFIED';}
+        catch {}
+        console.error('AgentGate evidence: '+config.evidence);
+      } else console.error('AgentGate: no fresh Hook evidence was produced');
+      if(code===0&&!verified){
+        console.error('AgentGate: refusing to report success without VERIFIED evidence');
+        done(2);
+      } else done(code??(signal?1:2));
+    });
   });
 }
 export async function main(argv=process.argv.slice(2)) {
