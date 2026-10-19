@@ -31,3 +31,11 @@ A real developer can use the reference setup quickly; adversarial tampering fail
 **Linux separate-UID simulation: PASS for OS permissions only.** A root-owned mode-0644 policy and hook under a non-writable root-owned directory rejected write attempts by the `nobody` user, while allowing writes to a separate workspace. This is not a live Claude Code Stop Hook E2E, and it does not prove protection when the agent runs with maintainer permissions.
 
 **Release decision:** NO-GO for v0.2 security/contract-integrity claims. Required next: real isolated Claude Code agent invocation under a restricted principal, immutable trusted hook configuration, tampering tests against both files and invocation, and documented installation workflow usable by an external developer.
+
+## Follow-up validation — 2026-10-19 (macOS MSM2-1)
+- KORA Reach / KRAKO remote command access works with uid 501 (`akim`).
+- `sudo -n true` reports `a password is required`; no authorized separate-UID launch path was available without interactive authorization.
+- No Docker or Podman executable was discovered.
+- A second `sandbox-exec` experiment with explicit `deny file-write-data` for a literal policy path plus `deny file-write-create` for the parent directory still permitted modification: original file became `changed`. Therefore do not use this environment as proof of a protected policy.
+- **NO-GO** on macOS isolation claim. Do not issue v0.2 or claim actual Claude Code adversarial testing has passed.
+- Next required step: administrator-approved separate execution identity/sandbox or an external Linux test host, with a trusted hook that the coding agent cannot edit. Run actual Claude Code adversarial scenarios only under that proven isolation.
