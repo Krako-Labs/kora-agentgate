@@ -23,3 +23,11 @@ Optional external policy path; additive per-task checks; explicit immutable poli
 
 ## Success gate
 A real developer can use the reference setup quickly; adversarial tampering fails in that defined deployment context; v0.1.1 verdict semantics remain intact.
+
+## Verification record — 2026-10-19
+
+**Mac host (MSM2-1): NOT ENFORCED.** A `sandbox-exec` deny-write profile did not deny a policy write in the tested invocation. The protected policy was overwritten, and the trusted-path verifier subsequently returned UNKNOWN. An agent-writable substitute contract returned VERIFIED. Therefore this deployment is explicitly unsafe and **must not be advertised as protected**.
+
+**Linux separate-UID simulation: PASS for OS permissions only.** A root-owned mode-0644 policy and hook under a non-writable root-owned directory rejected write attempts by the `nobody` user, while allowing writes to a separate workspace. This is not a live Claude Code Stop Hook E2E, and it does not prove protection when the agent runs with maintainer permissions.
+
+**Release decision:** NO-GO for v0.2 security/contract-integrity claims. Required next: real isolated Claude Code agent invocation under a restricted principal, immutable trusted hook configuration, tampering tests against both files and invocation, and documented installation workflow usable by an external developer.
